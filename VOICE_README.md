@@ -54,6 +54,23 @@ not by Claude's own shell.
 
 If port 8765 is taken it walks upward (max +20) and prints `TTS_SERVICE_PORT=<port>`.
 
+## Voice assignment (who sounds like whom)
+
+- Rules live in `voice-mapping.json` in the fork's data folder (`votc_data\`) —
+  "Open mapping file" / "Reload mapping" buttons are in the Voice tab. The file's
+  `_readme` section documents every condition and filter. Rules run top to bottom,
+  first match wins; gender and age band are applied automatically; filters relax
+  step by step so assignment can never fail while the library has ≥1 voice.
+- The final pick is a stable hash of the character ID over the sorted candidates:
+  the same character gets the same voice every session, with nothing stored.
+  Adding voices to the library can reshuffle some assignments (candidate sets
+  change) — pin characters you care about.
+- Pins live in `voice-overrides.json` (edited via the Voice tab's assignment
+  panel; pins beat all rules). Recent speakers are tracked in the same file.
+- Every decision is logged to `votc_data\logs\voice-assignments.log` (auto-rotated)
+  — read it to tune the mapping file.
+- Logic tests: `npx tsx scripts/test-voice-assignment.ts`.
+
 ## Original files touched (the merge map — keep current)
 
 | File | Why |

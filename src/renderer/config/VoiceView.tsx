@@ -2,6 +2,7 @@ import React, { ChangeEvent, useEffect, useState } from 'react';
 import type { VoiceSettings } from '../../main/llmProviders/types';
 import type { VoiceServiceStatus } from '../../preload/global';
 import VoiceCurator from './VoiceCurator';
+import VoiceAssignments from './VoiceAssignments';
 
 // voice-mode fork. Labels are hardcoded English: the voice feature is
 // English-only by design (see VOICE_README.md), so it stays out of the
@@ -141,6 +142,10 @@ const VoiceView: React.FC = () => {
                 <button type="button" onClick={() => window.voiceAPI.playbackCommand('skip')}>Skip</button>
                 <button type="button" onClick={() => window.voiceAPI.clearQueue()}>Clear queue</button>
             </div>
+
+            <hr />
+
+            <VoiceAssignments serviceUp={serviceUp} voiceEnabled={settings.enabled} />
 
             <hr />
 

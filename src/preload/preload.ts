@@ -199,6 +199,14 @@ contextBridge.exposeInMainWorld('voiceAPI', {
   curatorDelete: (voiceId: string): Promise<any> => ipcRenderer.invoke('voice:curatorDelete', voiceId),
   curatorRetranscribe: (voiceId: string): Promise<any> => ipcRenderer.invoke('voice:curatorRetranscribe', voiceId),
   getAudio: (kind: 'voice' | 'temp', ident: string): Promise<any> => ipcRenderer.invoke('voice:getAudio', kind, ident),
+  // Assignment engine
+  getAssignmentInfo: (): Promise<any> => ipcRenderer.invoke('voice:getAssignmentInfo'),
+  setOverride: (characterId: number, voiceId: string | null): Promise<void> =>
+    ipcRenderer.invoke('voice:setOverride', characterId, voiceId),
+  reloadMapping: (): Promise<{ success: boolean; error?: string; ruleCount?: number }> =>
+    ipcRenderer.invoke('voice:reloadMapping'),
+  openMappingFile: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('voice:openMappingFile'),
   clearQueue: (): Promise<void> => ipcRenderer.invoke('voice:clearQueue'),
   playbackCommand: (cmd: 'stop' | 'skip'): Promise<void> => ipcRenderer.invoke('voice:playbackCommand', cmd),
   onStatus: (callback: (status: any) => void) => {

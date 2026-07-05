@@ -2,6 +2,8 @@ import { BrowserWindow } from 'electron';
 import { Character } from '../gameData/Character';
 import { settingsRepository } from '../SettingsRepository';
 import { ttsService } from './TTSService';
+import { voiceAssigner } from './VoiceAssigner';
+import { VoiceCardLite } from './assignmentCore';
 
 const TEST_LINE = 'Greetings, my liege. If you can hear this, the voice pipeline is working.';
 
@@ -41,9 +43,7 @@ class VoiceManager {
             const text = settings.stripEmotes ? this.stripEmotes(content) : content;
             if (!text.trim()) return; // 100%-emote reply: speak nothing
 
-            // Phase 2: everyone speaks with the first library voice.
-            // Phase 4 replaces this with the assignment engine.
-            this.enqueueSynthesis(text, npc.fullName);
+            this.enqueueSynthesis(text, npc.fullName, undefined, npc);
         } catch (err) {
             console.error('[voice] onNpcReply failed (conversation unaffected):', err);
         }
@@ -66,7 +66,7 @@ class VoiceManager {
         this.send('voice:command', cmd);
     }
 
-    private enqueueSynthesis(text: string, speaker: string, requestedVoiceId?: string): void {
+    private enqueueSynthesis(text: string, speaker: string, requestedVoiceId?: string, npc?: Character): void {
         const generationAtEnqueue = this.generation;
         // Serialize synthesis: the GPU handles one request at a time, and
         // FIFO order here guarantees utterances arrive in reply order.
@@ -75,10 +75,12 @@ class VoiceManager {
             try {
                 let voiceId = requestedVoiceId;
                 if (!voiceId) {
-                    // Phase 2 placeholder assignment; Phase 4 brings the rules engine.
-                    const voices = await ttsService.listVoices();
+                    const voices = await ttsService.listVoices() as unknown as VoiceCardLite[];
                     if (voices.length === 0) return;
-                    voiceId = voices[0].voice_id;
+                    voiceId = npc
+                        ? voiceAssigner.assign(npc, voices) ?? undefined
+                        : voices[0].voice_id; // bare test line: any voice will do
+                    if (!voiceId) return;
                 }
                 const wav = await ttsService.synthesize(text, voiceId);
                 if (!wav) return; // nothing speakable

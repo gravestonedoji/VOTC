@@ -6,6 +6,7 @@ import { VoiceSettings } from '../llmProviders/types';
 import { VOTC_DATA_DIR } from '../utils/paths';
 import { ttsService } from './TTSService';
 import { voiceManager } from './VoiceManager';
+import { voiceAssigner } from './VoiceAssigner';
 
 /** All voice-mode IPC endpoints, registered with one call from main.ts. */
 export function registerVoiceIpcHandlers(): void {
@@ -85,6 +86,17 @@ export function registerVoiceIpcHandlers(): void {
         curatorCall(() => ttsService.curatorPost('/curator/retranscribe', { voice_id: voiceId })));
     ipcMain.handle('voice:getAudio', (_, kind: 'voice' | 'temp', ident: string) =>
         curatorCall(async () => (await ttsService.fetchAudio(kind, ident)).toString('base64')));
+
+    // ---- Assignment engine ----
+
+    ipcMain.handle('voice:getAssignmentInfo', () => voiceAssigner.getInfo());
+    ipcMain.handle('voice:setOverride', (_, characterId: number, voiceId: string | null) =>
+        voiceAssigner.setOverride(characterId, voiceId));
+    ipcMain.handle('voice:reloadMapping', () => voiceAssigner.reloadMapping());
+    ipcMain.handle('voice:openMappingFile', async () => {
+        const error = await shell.openPath(voiceAssigner.getMappingPath());
+        return { success: !error, error: error || undefined };
+    });
 
     console.log('Voice IPC handlers registered successfully');
 }
