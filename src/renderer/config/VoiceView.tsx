@@ -79,6 +79,9 @@ const VoiceView: React.FC = () => {
                 <button type="button" onClick={handleReloadLibrary} disabled={!serviceUp}>
                     Reload voice library
                 </button>
+                <button type="button" onClick={() => window.voiceAPI.openVoicesFolder()}>
+                    Open voices folder
+                </button>
                 <button type="button" onClick={() => window.voiceAPI.speakTestLine()} disabled={!serviceUp || !settings.enabled}>
                     Speak a test line
                 </button>

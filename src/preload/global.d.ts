@@ -43,6 +43,7 @@ declare global {
       startService: () => Promise<void>;
       restartService: () => Promise<void>;
       reloadLibrary: () => Promise<{ success: boolean; voices?: number; error?: string }>;
+      openVoicesFolder: () => Promise<{ success: boolean; error?: string }>;
       speakTestLine: () => Promise<void>;
       clearQueue: () => Promise<void>;
       playbackCommand: (cmd: 'stop' | 'skip') => Promise<void>;
