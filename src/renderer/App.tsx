@@ -2,8 +2,10 @@ import { useState, useCallback, useEffect } from 'react';
 import Chat from './chat/Chat';
 import ConfigPanel from './config/ConfigPanel';
 import { useConfigStore, useAppSettings } from './config/store/useConfigStore';
+import { useVoicePlayer } from './voice/useVoicePlayer'; // voice-mode fork
 
 function App() {
+  useVoicePlayer(); // voice-mode fork: mounts the NPC speech player for the app's lifetime
   const [showChat, setShowChat] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [isOverlayVisible, setIsOverlayVisible] = useState(true); 

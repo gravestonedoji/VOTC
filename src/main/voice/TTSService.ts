@@ -1,0 +1,197 @@
+import { spawn, ChildProcess } from 'child_process';
+import path from 'path';
+import { app } from 'electron';
+import { EventEmitter } from 'events';
+import { VOTC_DATA_DIR } from '../utils/paths';
+
+export type TTSServiceState = 'stopped' | 'starting' | 'running' | 'error';
+
+export interface TTSStatus {
+    state: TTSServiceState;
+    port: number | null;
+    voices: number;
+    device: string | null;
+    detail?: string;
+}
+
+const HEALTH_POLL_MS = 5000;
+const STARTUP_TIMEOUT_MS = 120_000; // model load takes ~20s; leave generous headroom
+
+/**
+ * Manages the local F5-TTS python service as a child process:
+ * spawn on demand, discover the actual port from stdout, health-check,
+ * restart, and shut down with the app. All failures degrade to a status
+ * change — nothing here ever throws into the caller.
+ */
+export class TTSService extends EventEmitter {
+    private child: ChildProcess | null = null;
+    private status: TTSStatus = { state: 'stopped', port: null, voices: 0, device: null };
+    private healthTimer: NodeJS.Timeout | null = null;
+    private stopping = false;
+
+    getStatus(): TTSStatus {
+        return { ...this.status };
+    }
+
+    private setStatus(patch: Partial<TTSStatus>): void {
+        this.status = { ...this.status, ...patch };
+        this.emit('status', this.getStatus());
+    }
+
+    start(preferredPort: number): void {
+        if (this.child) return; // already running or starting
+        this.stopping = false;
+
+        const serverDir = path.join(app.getAppPath(), 'tts-server');
+        const voicesDir = path.join(VOTC_DATA_DIR, 'voices');
+        this.setStatus({ state: 'starting', port: null, detail: 'launching python service' });
+
+        let child: ChildProcess;
+        try {
+            child = spawn('python', ['server.py', '--port', String(preferredPort), '--voices-dir', voicesDir], {
+                cwd: serverDir,
+                stdio: ['ignore', 'pipe', 'pipe'],
+                windowsHide: true,
+            });
+        } catch (err) {
+            this.setStatus({ state: 'error', detail: `failed to launch python: ${err}` });
+            return;
+        }
+        this.child = child;
+
+        const startupDeadline = setTimeout(() => {
+            if (this.status.state === 'starting') {
+                this.setStatus({ state: 'error', detail: 'service did not become healthy in time' });
+            }
+        }, STARTUP_TIMEOUT_MS);
+
+        child.stdout?.on('data', (buf: Buffer) => {
+            const text = buf.toString();
+            for (const line of text.split(/\r?\n/)) {
+                if (!line.trim()) continue;
+                console.log('[tts-service]', line);
+                const m = line.match(/^TTS_SERVICE_PORT=(\d+)/);
+                if (m) {
+                    this.setStatus({ port: parseInt(m[1], 10) });
+                    this.beginHealthPolling();
+                }
+            }
+        });
+        child.stderr?.on('data', (buf: Buffer) => {
+            // Python logging writes to stderr; it is mostly INFO noise.
+            for (const line of buf.toString().split(/\r?\n/)) {
+                if (line.trim()) console.log('[tts-service]', line);
+            }
+        });
+
+        child.on('exit', (code) => {
+            clearTimeout(startupDeadline);
+            this.stopHealthPolling();
+            this.child = null;
+            if (!this.stopping) {
+                this.setStatus({ state: 'error', port: null, detail: `service exited unexpectedly (code ${code})` });
+            } else {
+                this.setStatus({ state: 'stopped', port: null, voices: 0, device: null, detail: undefined });
+            }
+        });
+        child.on('error', (err) => {
+            clearTimeout(startupDeadline);
+            this.stopHealthPolling();
+            this.child = null;
+            // Typical cause: python not on PATH.
+            this.setStatus({ state: 'error', port: null, detail: `could not start python: ${err.message}` });
+        });
+    }
+
+    stop(): void {
+        this.stopping = true;
+        this.stopHealthPolling();
+        if (this.child) {
+            this.child.kill();
+            this.child = null;
+        }
+        this.setStatus({ state: 'stopped', port: null, voices: 0, device: null });
+    }
+
+    restart(preferredPort: number): void {
+        this.stop();
+        // Give the old process a moment to release the port.
+        setTimeout(() => this.start(preferredPort), 1000);
+    }
+
+    private beginHealthPolling(): void {
+        this.stopHealthPolling();
+        const poll = async () => {
+            const ok = await this.checkHealth();
+            // While starting, poll fast so the status light turns green promptly.
+            const next = ok ? HEALTH_POLL_MS : (this.status.state === 'starting' ? 1500 : HEALTH_POLL_MS);
+            this.healthTimer = setTimeout(poll, next);
+        };
+        poll();
+    }
+
+    private stopHealthPolling(): void {
+        if (this.healthTimer) {
+            clearTimeout(this.healthTimer);
+            this.healthTimer = null;
+        }
+    }
+
+    private async checkHealth(): Promise<boolean> {
+        if (!this.status.port) return false;
+        try {
+            const res = await fetch(`http://127.0.0.1:${this.status.port}/health`, {
+                signal: AbortSignal.timeout(3000),
+            });
+            if (!res.ok) throw new Error(`health returned ${res.status}`);
+            const h = await res.json() as { voices: number; device: string };
+            this.setStatus({ state: 'running', voices: h.voices, device: h.device, detail: undefined });
+            return true;
+        } catch {
+            if (this.status.state === 'running') {
+                this.setStatus({ state: 'error', detail: 'service stopped responding' });
+            }
+            return false;
+        }
+    }
+
+    /** POST /synthesize. Returns WAV bytes, or null when there is nothing to speak (204). */
+    async synthesize(text: string, voiceId: string): Promise<Buffer | null> {
+        if (this.status.state !== 'running' || !this.status.port) {
+            throw new Error('TTS service is not running');
+        }
+        const res = await fetch(`http://127.0.0.1:${this.status.port}/synthesize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, voice_id: voiceId }),
+            signal: AbortSignal.timeout(120_000),
+        });
+        if (res.status === 204) return null;
+        if (!res.ok) throw new Error(`synthesize failed (${res.status}): ${await res.text()}`);
+        return Buffer.from(await res.arrayBuffer());
+    }
+
+    async listVoices(): Promise<Array<{ voice_id: string;[k: string]: unknown }>> {
+        if (this.status.state !== 'running' || !this.status.port) return [];
+        try {
+            const res = await fetch(`http://127.0.0.1:${this.status.port}/voices`, { signal: AbortSignal.timeout(5000) });
+            const data = await res.json() as { voices: Array<{ voice_id: string }> };
+            return data.voices;
+        } catch {
+            return [];
+        }
+    }
+
+    async reloadLibrary(): Promise<number> {
+        if (this.status.state !== 'running' || !this.status.port) return 0;
+        const res = await fetch(`http://127.0.0.1:${this.status.port}/reload`, {
+            method: 'POST',
+            signal: AbortSignal.timeout(10_000),
+        });
+        const data = await res.json() as { voices: number };
+        this.setStatus({ voices: data.voices });
+        return data.voices;
+    }
+}
+
+export const ttsService = new TTSService();

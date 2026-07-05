@@ -1,5 +1,6 @@
 import { Conversation } from "./Conversation";
 import { ILLMStreamChunk } from "../llmProviders/types";
+import { voiceManager } from "../voice/VoiceManager"; // voice-mode fork
 import { EventEmitter } from "events";
 import { PromptBuilder } from "./PromptBuilder";
 import { createActionFeedback } from "./types";
@@ -40,6 +41,7 @@ export class ConversationManager {
     createConversation(): Conversation | null {
         try {
             this.endCurrentConversation();
+            voiceManager.clearQueue(); // voice-mode fork: a new conversation drops stale audio
             this.currentConversation = new Conversation();
             this.setupConversationListeners();
             return this.currentConversation;

@@ -12,6 +12,8 @@ import {
   PROVIDER_TYPES,
   DEFAULT_PROVIDER_CONFIGS,
   DEFAULT_ACTIVE_PROVIDER,
+  VoiceSettings,
+  DEFAULT_VOICE_SETTINGS,
 } from './llmProviders/types';
 import { promptConfigManager } from './conversation/PromptConfigManager';
 
@@ -177,6 +179,18 @@ const schema: Schema<AppSettings> = {
   allowPrerelease: {
     type: 'boolean',
     default: false
+  },
+  // voice-mode fork
+  voiceSettings: {
+    type: 'object',
+    default: DEFAULT_VOICE_SETTINGS,
+    properties: {
+      enabled: { type: 'boolean', default: true },
+      volume: { type: 'number', default: 0.8 },
+      stripEmotes: { type: 'boolean', default: true },
+      autoStartService: { type: 'boolean', default: true },
+      servicePort: { type: 'number', default: 8765 }
+    }
   }
 };
 
@@ -326,8 +340,19 @@ export class SettingsRepository {
       actionSettings: this.getActionSettings(),
       actionApprovalSettings: this.getActionApprovalSettings(),
       summaryPromptSettings: this.getSummaryPromptSettings(),
-      language: this.getLanguage()
+      language: this.getLanguage(),
+      voiceSettings: this.getVoiceSettings() // voice-mode fork
     };
+  }
+
+  // voice-mode fork
+  getVoiceSettings(): VoiceSettings {
+    return { ...DEFAULT_VOICE_SETTINGS, ...this.store.get('voiceSettings', DEFAULT_VOICE_SETTINGS) };
+  }
+
+  saveVoiceSettings(settings: Partial<VoiceSettings>): void {
+    this.store.set('voiceSettings', { ...this.getVoiceSettings(), ...settings });
+    console.log('Voice settings saved:', settings);
   }
 
   getLLMSettings(): LLMSettings {

@@ -97,3 +97,5 @@ dist/
 
 src/main/actions/standartActions/*
 !src/main/actions/standartActions/z_*
+# voice-mode fork: raw gathered clips staging area (never committed)
+voice-clips/

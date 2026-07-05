@@ -1,4 +1,20 @@
-import type { LLMProviderConfig, AppSettings, ILLMModel, PromptSettings, ActionApprovalSettings } from '../main/llmProviders/types';
+import type { LLMProviderConfig, AppSettings, ILLMModel, PromptSettings, ActionApprovalSettings, VoiceSettings } from '../main/llmProviders/types';
+
+// voice-mode fork
+export interface VoiceServiceStatus {
+  state: 'stopped' | 'starting' | 'running' | 'error';
+  port: number | null;
+  voices: number;
+  device: string | null;
+  detail?: string;
+}
+
+export interface VoiceUtterance {
+  utteranceId: number;
+  speaker: string;
+  volume: number;
+  wavBase64: string;
+}
 
 // Types for summaries manager
 export interface ConversationSummary {
@@ -19,6 +35,22 @@ export interface SummaryMetadata {
 
 declare global {
   interface Window {
+    // voice-mode fork
+    voiceAPI: {
+      getSettings: () => Promise<VoiceSettings>;
+      saveSettings: (patch: Partial<VoiceSettings>) => Promise<VoiceSettings>;
+      getStatus: () => Promise<VoiceServiceStatus>;
+      startService: () => Promise<void>;
+      restartService: () => Promise<void>;
+      reloadLibrary: () => Promise<{ success: boolean; voices?: number; error?: string }>;
+      speakTestLine: () => Promise<void>;
+      clearQueue: () => Promise<void>;
+      playbackCommand: (cmd: 'stop' | 'skip') => Promise<void>;
+      onStatus: (callback: (status: VoiceServiceStatus) => void) => () => void;
+      onEnqueue: (callback: (utterance: VoiceUtterance) => void) => () => void;
+      onClear: (callback: () => void) => () => void;
+      onCommand: (callback: (cmd: 'stop' | 'skip') => void) => () => void;
+    };
     conversationAPI: {
       sendMessage: (userMessage: string) => Promise<{streamStarted?: boolean, message?: any, error?: string}>;
       reset: () => Promise<boolean>;
