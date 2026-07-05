@@ -138,13 +138,23 @@ const CardForm: React.FC<{
     );
 };
 
-const VoiceCurator: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({ serviceUp, voiceEnabled }) => {
+interface VoiceCuratorProps {
+    serviceUp: boolean;
+    voiceEnabled: boolean;
+    /** Set by the assignment panel to jump straight into editing a voice. */
+    editVoiceId?: string | null;
+    onEditConsumed?: () => void;
+}
+
+const VoiceCurator: React.FC<VoiceCuratorProps> = ({ serviceUp, voiceEnabled, editVoiceId, onEditConsumed }) => {
     const [pending, setPending] = useState<PendingImport[]>([]);
     const [library, setLibrary] = useState<VoiceCard[]>([]);
     const [importing, setImporting] = useState(false);
     const [notice, setNotice] = useState('');
+    const [search, setSearch] = useState('');
     const [editing, setEditing] = useState<(VoiceCard & { transcript: string }) | null>(null);
     const previewRef = useRef<HTMLAudioElement | null>(null);
+    const editingRowRef = useRef<HTMLDivElement | null>(null);
 
     const refreshLibrary = useCallback(async () => {
         setLibrary(await window.voiceAPI.listVoices());
@@ -153,6 +163,32 @@ const VoiceCurator: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({
     useEffect(() => {
         if (serviceUp) refreshLibrary();
     }, [serviceUp, refreshLibrary]);
+
+    // "Edit voice" clicked in the assignment panel: open that voice's editor here.
+    useEffect(() => {
+        if (!editVoiceId) return;
+        const voice = library.find((v) => v.voice_id === editVoiceId);
+        if (voice) {
+            setSearch('');
+            setEditing({ ...voice, transcript: voice.transcript || '' });
+            onEditConsumed?.();
+        }
+    }, [editVoiceId, library, onEditConsumed]);
+
+    // Bring the freshly opened editor into view (it may be far down the list).
+    useEffect(() => {
+        if (editing) editingRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, [editing?.voice_id]);
+
+    const matchesSearch = (voice: VoiceCard): boolean => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return [voice.voice_id, voice.display_name, voice.gender, voice.age_band,
+            voice.accent_tag, ...voice.personality_tags, ...voice.mod_tags]
+            .some((field) => String(field ?? '').toLowerCase().includes(q));
+    };
+
+    const visibleLibrary = library.filter(matchesSearch);
 
     const stopPreview = useCallback(() => {
         const audio = previewRef.current;
@@ -273,10 +309,23 @@ const VoiceCurator: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({
                 </small>
             </div>
 
-            <div className="form-group button-group">
+            <div className="form-group button-group" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="button" onClick={handleImport} disabled={importing}>
                     {importing ? 'Importing…' : 'Import clips…'}
                 </button>
+                <input
+                    type="text"
+                    placeholder="Search voices… (name, tag, gender, accent)"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    style={{ flex: 1, minWidth: '180px' }}
+                />
+                {search && (
+                    <small style={{ opacity: 0.7 }}>
+                        {visibleLibrary.length} of {library.length} shown
+                        {' '}<button type="button" onClick={() => setSearch('')}>✕</button>
+                    </small>
+                )}
             </div>
             {notice && <small style={{ display: 'block', opacity: 0.85, marginBottom: '8px' }}>{notice}</small>}
 
@@ -311,10 +360,10 @@ const VoiceCurator: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({
                 </div>
             ))}
 
-            {library.map((voice) => (
+            {visibleLibrary.map((voice) => (
                 <div key={voice.voice_id} style={{ borderBottom: '1px solid rgba(128,128,128,0.25)', padding: '6px 0' }}>
                     {editing?.voice_id === voice.voice_id ? (
-                        <div style={{ border: '1px solid rgba(128,128,128,0.4)', borderRadius: '6px', padding: '10px' }}>
+                        <div ref={editingRowRef} style={{ border: '1px solid rgba(128,128,128,0.4)', borderRadius: '6px', padding: '10px' }}>
                             <div className="form-group"><b>Editing: {voice.voice_id}</b></div>
                             <div className="form-group">
                                 <label>Transcript:</label>
@@ -331,11 +380,13 @@ const VoiceCurator: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({
                         </div>
                     ) : (
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <b>{voice.display_name || voice.voice_id}</b>
+                            <b>{voice.voice_id}</b>
                             <small style={{ opacity: 0.7 }}>
-                                {voice.voice_id} — {voice.gender}, {voice.age_band}
+                                {voice.gender}, {voice.age_band}
                                 {voice.personality_tags.length > 0 && `, ${voice.personality_tags.join('/')}`}
                                 {voice.accent_tag !== 'neutral' && `, ${voice.accent_tag}`}
+                                {(voice.speed ?? 1) !== 1 && `, ${(voice.speed ?? 1).toFixed(2)}×`}
+                                {voice.display_name && voice.display_name !== voice.voice_id && ` — ${voice.display_name}`}
                             </small>
                             <span style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
                                 <button type="button" title="Play the reference clip"
