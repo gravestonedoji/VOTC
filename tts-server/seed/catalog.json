@@ -1,0 +1,15 @@
+{
+  "voices": [
+    {
+      "voice_id": "f_adult_neutral_test",
+      "display_name": "Test Voice (F5-TTS sample)",
+      "gender": "female",
+      "age_band": "adult",
+      "personality_tags": [],
+      "accent_tag": "neutral",
+      "mod_tags": [],
+      "source_note": "Bundled F5-TTS example clip (basic_ref_en.wav) - placeholder until real clips are imported via the Curator",
+      "created": "2026-07-05"
+    }
+  ]
+}
