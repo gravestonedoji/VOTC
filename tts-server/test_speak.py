@@ -43,7 +43,11 @@ def main() -> None:
 
     print(f"Service is up: device={health['device']}, voices in library={health['voices']}")
     if health["voices"] == 0:
-        fail("The voice library is empty — there is nothing to speak with.")
+        fail("The voice library is empty — there is nothing to speak with.\n"
+             f"The service (running as user '{health.get('user', '?')}') is looking in:\n"
+             f"  {health.get('voices_dir', '?')}\n"
+             "If that path or user looks wrong, close the service window and start it\n"
+             "again with a normal double-click — NOT 'Run as administrator'.")
 
     voice = args.voice
     if voice is None:
