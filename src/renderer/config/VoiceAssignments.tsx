@@ -4,7 +4,14 @@ import type { AssignmentInfo, VoiceCard } from '../../preload/global';
 // voice-mode fork: who-sounds-like-whom panel — recent speakers with
 // per-character voice pins, plus the mapping-file controls.
 
-const VoiceAssignments: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({ serviceUp, voiceEnabled }) => {
+interface VoiceAssignmentsProps {
+    serviceUp: boolean;
+    voiceEnabled: boolean;
+    /** Opens the given voice in the Curator's editor below. */
+    onEditVoice: (voiceId: string) => void;
+}
+
+const VoiceAssignments: React.FC<VoiceAssignmentsProps> = ({ serviceUp, voiceEnabled, onEditVoice }) => {
     const [info, setInfo] = useState<AssignmentInfo | null>(null);
     const [voices, setVoices] = useState<VoiceCard[]>([]);
     const [notice, setNotice] = useState('');
@@ -74,7 +81,7 @@ const VoiceAssignments: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> 
                         <option value="__auto__">Auto ({speaker.lastVoiceId})</option>
                         {voices.map((v) => (
                             <option key={v.voice_id} value={v.voice_id}>
-                                📌 {v.display_name || v.voice_id}
+                                📌 {v.voice_id}
                             </option>
                         ))}
                     </select>
@@ -86,6 +93,14 @@ const VoiceAssignments: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> 
                             info.overrides[String(speaker.id)] ?? speaker.lastVoiceId)}
                     >
                         🗣
+                    </button>
+                    <button
+                        type="button"
+                        title="Edit this voice's settings (speed, tags, transcript) in the library below"
+                        disabled={!serviceUp}
+                        onClick={() => onEditVoice(info.overrides[String(speaker.id)] ?? speaker.lastVoiceId)}
+                    >
+                        Edit voice
                     </button>
                 </div>
             ))}

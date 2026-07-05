@@ -26,6 +26,7 @@ const VoiceView: React.FC = () => {
     const [settings, setSettings] = useState<VoiceSettings | null>(null);
     const [status, setStatus] = useState<VoiceServiceStatus | null>(null);
     const [notice, setNotice] = useState<string>('');
+    const [editVoiceId, setEditVoiceId] = useState<string | null>(null);
 
     useEffect(() => {
         window.voiceAPI.getSettings().then(setSettings);
@@ -148,11 +149,16 @@ const VoiceView: React.FC = () => {
 
             <hr />
 
-            <VoiceAssignments serviceUp={serviceUp} voiceEnabled={settings.enabled} />
+            <VoiceAssignments serviceUp={serviceUp} voiceEnabled={settings.enabled} onEditVoice={setEditVoiceId} />
 
             <hr />
 
-            <VoiceCurator serviceUp={serviceUp} voiceEnabled={settings.enabled} />
+            <VoiceCurator
+                serviceUp={serviceUp}
+                voiceEnabled={settings.enabled}
+                editVoiceId={editVoiceId}
+                onEditConsumed={() => setEditVoiceId(null)}
+            />
         </div>
     );
 };
