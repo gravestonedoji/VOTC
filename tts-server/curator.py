@@ -36,7 +36,8 @@ _FFMPEG_FILTERS = (
     "areverse,"
     "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.15,"
     "areverse,"
-    "loudnorm=I=-18:TP=-2:LRA=11"
+    "loudnorm=I=-18:TP=-2:LRA=11,"
+    "apad=pad_dur=0.3"  # soft ending for previews; synthesis-side padding is handled in server.py
 )
 
 

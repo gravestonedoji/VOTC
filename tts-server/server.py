@@ -24,6 +24,7 @@ import os
 import re
 import socket
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -120,10 +121,19 @@ class VoiceLibrary:
 # TTS engine — loads the F5-TTS model once, caches per-voice references
 # --------------------------------------------------------------------------
 
+# F5-TTS's own preprocessing trims the reference and re-adds only 50 ms of
+# trailing silence. For some voices that is too abrupt: the model never sees
+# a real pause, and fills sentence gaps in generated speech by repeating the
+# tail of the reference line. Padding the reference with genuine silence
+# AFTER F5's preprocessing (which would otherwise strip it again) fixes it.
+TRAILING_REF_SILENCE_S = 0.35
+
+
 class Engine:
     def __init__(self, library: VoiceLibrary):
         self.library = library
         self._ref_cache: dict[str, tuple[str, str]] = {}
+        self._ref_dir = Path(tempfile.mkdtemp(prefix="votc_refs_"))
         log.info("loading F5-TTS model (first load takes a few seconds)...")
         t0 = time.perf_counter()
         from f5_tts.api import F5TTS  # imported late so --help stays fast
@@ -134,26 +144,39 @@ class Engine:
         self._ref_cache = {}
 
     def _reference_for(self, voice_id: str) -> tuple[str, str]:
-        """Return (processed_ref_wav, processed_ref_text), cached per voice."""
+        """Return (padded processed ref wav, processed ref text), cached per voice."""
         if voice_id not in self._ref_cache:
+            import numpy as np
             from f5_tts.infer.utils_infer import preprocess_ref_audio_text
             entry = self.library.entries[voice_id]
             ref_file, ref_text = preprocess_ref_audio_text(
                 str(entry["wav_path"]), entry["ref_text"], show_info=log.debug
             )
-            self._ref_cache[voice_id] = (ref_file, ref_text)
+            data, sr = sf.read(ref_file)
+            padded = np.concatenate([data, np.zeros(int(sr * TRAILING_REF_SILENCE_S), dtype=data.dtype)])
+            padded_path = self._ref_dir / f"{voice_id}.wav"
+            sf.write(padded_path, padded, sr)
+            self._ref_cache[voice_id] = (str(padded_path), ref_text)
         return self._ref_cache[voice_id]
 
     def synthesize(self, text: str, voice_id: str) -> bytes:
         ref_file, ref_text = self._reference_for(voice_id)
         t0 = time.perf_counter()
-        wav, sr, _ = self.f5.infer(
-            ref_file=ref_file,
-            ref_text=ref_text,
-            gen_text=text,
-            seed=INFERENCE_SEED,
+        # Call the inference step directly: F5TTS.infer() would re-run its
+        # preprocessing on our padded reference and strip the padding again.
+        from f5_tts.infer.utils_infer import infer_process
+        from f5_tts.model.utils import seed_everything
+        seed_everything(INFERENCE_SEED)
+        wav, sr, _ = infer_process(
+            ref_file,
+            ref_text,
+            text,
+            self.f5.ema_model,
+            self.f5.vocoder,
+            self.f5.mel_spec_type,
             show_info=log.debug,
             progress=None,
+            device=self.f5.device,
         )
         elapsed = time.perf_counter() - t0
         duration = len(wav) / sr
