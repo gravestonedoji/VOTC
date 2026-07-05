@@ -94,6 +94,11 @@ Deviation note: the Voice tab label and VoiceView texts are hardcoded English ra
 than added to the 9 locale files — the voice feature is English-only by design and
 this keeps the upstream merge surface small.
 
+Packaging note: this fork is meant to run from source via `Start VOTC Voice.bat`.
+If it is ever packaged with electron-builder, the TTS service spawn path
+(`app.getAppPath()/tts-server` in `src/main/voice/TTSService.ts`) would point inside
+the asar archive and must be adjusted (e.g. ship tts-server as an extraResource).
+
 ## Pulling in a new upstream VOTC release
 
 ```
@@ -120,5 +125,17 @@ procedure above, so their versions will drift. That is expected.
 - **A clip transcribes badly or clones poorly:** re-record or re-trim in the Curator;
   fix the transcript text — transcript accuracy directly affects cloning quality.
   Best clips: 5–12 s, one speaker, no music or echo.
+- **A voice repeats the end of its reference line at sentence gaps:** the service pads
+  each reference with 0.35 s of silence after F5-TTS's own (too aggressive) trimming,
+  which fixed this class of artifact. If it recurs for one voice, check that voice's
+  transcript exactly matches the END of the clip (Edit → play the clip → compare),
+  and that the clip doesn't cut off mid-word.
+- **First import of a session is slow:** the Whisper transcription model loads on
+  first use (~15 s). Subsequent imports are fast.
+- **Status light green but a different port than 8765:** normal — if the port is
+  taken (e.g. a manually started service), the app's service walks up to the next
+  free port and the app follows it automatically.
 - **Library empty / folder renamed:** the app runs exactly like vanilla VOTC;
   the service logs a warning and `GET /health` shows `"voices": 0`.
+- **Assignments look wrong:** read `votc_data\logs\voice-assignments.log` — every
+  decision lists the character's facts, the rule that fired, and the candidate count.

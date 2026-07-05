@@ -88,15 +88,20 @@ class VoiceLibrary:
         self.entries: dict[str, dict] = {}
 
     def reload(self) -> None:
-        self.entries = {}
+        # Build into a local dict and swap in ONE assignment at the end:
+        # /synthesize runs on other threads and must never observe a
+        # half-filled library while the Curator is writing.
+        entries: dict[str, dict] = {}
         catalog_path = self.voices_dir / "catalog.json"
         if not catalog_path.is_file():
             log.warning("voice library: no catalog at %s — library is empty", catalog_path)
+            self.entries = entries
             return
         try:
             catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as e:
             log.error("voice library: cannot read catalog.json (%s) — library is empty", e)
+            self.entries = entries
             return
         for entry in catalog.get("voices", []):
             voice_id = entry.get("voice_id")
@@ -113,7 +118,8 @@ class VoiceLibrary:
             if not ref_text:
                 log.warning("voice library: skipping '%s' — transcript file is empty", voice_id)
                 continue
-            self.entries[voice_id] = {"meta": entry, "wav_path": wav, "ref_text": ref_text}
+            entries[voice_id] = {"meta": entry, "wav_path": wav, "ref_text": ref_text}
+        self.entries = entries
         log.info("voice library: %d voice(s) loaded from %s", len(self.entries), self.voices_dir)
 
 
@@ -133,6 +139,7 @@ class Engine:
     def __init__(self, library: VoiceLibrary):
         self.library = library
         self._ref_cache: dict[str, tuple[str, str]] = {}
+        self._cache_gen = 0  # bumped on clear so in-flight preprocessing can't re-insert stale refs
         self._ref_dir = Path(tempfile.mkdtemp(prefix="votc_refs_"))
         log.info("loading F5-TTS model (first load takes a few seconds)...")
         t0 = time.perf_counter()
@@ -141,23 +148,29 @@ class Engine:
         log.info("model loaded on '%s' in %.1fs", self.f5.device, time.perf_counter() - t0)
 
     def clear_cache(self) -> None:
+        self._cache_gen += 1
         self._ref_cache = {}
 
     def _reference_for(self, voice_id: str) -> tuple[str, str]:
         """Return (padded processed ref wav, processed ref text), cached per voice."""
-        if voice_id not in self._ref_cache:
-            import numpy as np
-            from f5_tts.infer.utils_infer import preprocess_ref_audio_text
-            entry = self.library.entries[voice_id]
-            ref_file, ref_text = preprocess_ref_audio_text(
-                str(entry["wav_path"]), entry["ref_text"], show_info=log.debug
-            )
-            data, sr = sf.read(ref_file)
-            padded = np.concatenate([data, np.zeros(int(sr * TRAILING_REF_SILENCE_S), dtype=data.dtype)])
-            padded_path = self._ref_dir / f"{voice_id}.wav"
-            sf.write(padded_path, padded, sr)
-            self._ref_cache[voice_id] = (str(padded_path), ref_text)
-        return self._ref_cache[voice_id]
+        cached = self._ref_cache.get(voice_id)
+        if cached is not None:
+            return cached
+        gen = self._cache_gen
+        import numpy as np
+        from f5_tts.infer.utils_infer import preprocess_ref_audio_text
+        entry = self.library.entries[voice_id]
+        ref_file, ref_text = preprocess_ref_audio_text(
+            str(entry["wav_path"]), entry["ref_text"], show_info=log.debug
+        )
+        data, sr = sf.read(ref_file)
+        padded = np.concatenate([data, np.zeros(int(sr * TRAILING_REF_SILENCE_S), dtype=data.dtype)])
+        padded_path = self._ref_dir / f"{voice_id}_{gen}.wav"
+        sf.write(padded_path, padded, sr)
+        value = (str(padded_path), ref_text)
+        if gen == self._cache_gen:  # don't re-insert a ref that was invalidated mid-flight
+            self._ref_cache[voice_id] = value
+        return value
 
     def synthesize(self, text: str, voice_id: str) -> bytes:
         ref_file, ref_text = self._reference_for(voice_id)
@@ -290,8 +303,9 @@ def build_app(library: VoiceLibrary, engine: Engine) -> FastAPI:
 
     @app.post("/reload")
     def reload_library():
-        library.reload()
-        engine.clear_cache()
+        with curator.catalog_lock:
+            library.reload()
+            engine.clear_cache()
         return {"voices": len(library.entries)}
 
     @app.post("/synthesize")

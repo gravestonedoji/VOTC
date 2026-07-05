@@ -139,15 +139,33 @@ const VoiceCurator: React.FC<{ serviceUp: boolean; voiceEnabled: boolean }> = ({
         if (serviceUp) refreshLibrary();
     }, [serviceUp, refreshLibrary]);
 
+    const stopPreview = useCallback(() => {
+        const audio = previewRef.current;
+        if (audio) {
+            previewRef.current = null;
+            audio.pause();
+            if (audio.src) URL.revokeObjectURL(audio.src); // paused audio never fires onended — revoke here
+        }
+    }, []);
+
+    // Stop playback and release the blob if the user switches tabs mid-preview.
+    useEffect(() => stopPreview, [stopPreview]);
+
     const playPreview = async (kind: 'voice' | 'temp', ident: string) => {
         const result = await window.voiceAPI.getAudio(kind, ident);
         if (!result.success) { setNotice(result.error); return; }
-        previewRef.current?.pause();
+        stopPreview();
         const bytes = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
-        const audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })));
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+        const audio = new Audio(url);
+        const finish = () => {
+            if (previewRef.current === audio) previewRef.current = null;
+            URL.revokeObjectURL(url);
+        };
+        audio.onended = finish;
+        audio.onerror = finish;
         previewRef.current = audio;
-        audio.onended = () => URL.revokeObjectURL(audio.src);
-        audio.play();
+        audio.play().catch(finish);
     };
 
     const handleImport = async () => {

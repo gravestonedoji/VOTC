@@ -13,10 +13,15 @@ export function registerVoiceIpcHandlers(): void {
     ipcMain.handle('voice:getSettings', () => settingsRepository.getVoiceSettings());
 
     ipcMain.handle('voice:saveSettings', (_, patch: Partial<VoiceSettings>) => {
-        settingsRepository.saveVoiceSettings(patch);
+        try {
+            settingsRepository.saveVoiceSettings(patch);
+        } catch (err) {
+            console.error('[voice] saving settings failed:', err);
+        }
         if (patch.enabled === false) {
             voiceManager.clearQueue(); // master OFF: stop speaking immediately
         }
+        // Always return the store's actual state so the UI can't drift from reality.
         return settingsRepository.getVoiceSettings();
     });
 
@@ -39,10 +44,14 @@ export function registerVoiceIpcHandlers(): void {
     });
 
     ipcMain.handle('voice:openVoicesFolder', async () => {
-        const voicesDir = path.join(VOTC_DATA_DIR, 'voices');
-        fs.mkdirSync(voicesDir, { recursive: true });
-        const error = await shell.openPath(voicesDir);
-        return { success: !error, error: error || undefined };
+        try {
+            const voicesDir = path.join(VOTC_DATA_DIR, 'voices');
+            fs.mkdirSync(voicesDir, { recursive: true });
+            const error = await shell.openPath(voicesDir);
+            return { success: !error, error: error || undefined };
+        } catch (err) {
+            return { success: false, error: (err as Error).message };
+        }
     });
 
     ipcMain.handle('voice:speakTestLine', (_, voiceId?: string) => voiceManager.speakTestLine(voiceId));

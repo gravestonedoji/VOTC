@@ -138,9 +138,12 @@ const VoiceView: React.FC = () => {
             <hr />
 
             <div className="form-group button-group">
-                <button type="button" onClick={() => window.voiceAPI.playbackCommand('stop')}>Stop current</button>
-                <button type="button" onClick={() => window.voiceAPI.playbackCommand('skip')}>Skip</button>
-                <button type="button" onClick={() => window.voiceAPI.clearQueue()}>Clear queue</button>
+                <button type="button" title="Stop speaking and drop anything queued"
+                    onClick={() => window.voiceAPI.playbackCommand('stop')}>Stop</button>
+                <button type="button" title="Jump to the next queued utterance"
+                    onClick={() => window.voiceAPI.playbackCommand('skip')}>Skip</button>
+                <button type="button" title="Drop queued utterances but let the current one finish"
+                    onClick={() => window.voiceAPI.clearQueue()}>Clear queue</button>
             </div>
 
             <hr />

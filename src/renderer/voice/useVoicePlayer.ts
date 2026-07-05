@@ -59,7 +59,10 @@ export function useVoicePlayer(): void {
             }),
             window.voiceAPI.onCommand((cmd) => {
                 if (cmd === 'stop') {
-                    // Stop current playback but keep the queue.
+                    // "Stop" means silence: drop the queue too. Keeping queued
+                    // utterances around would make them blurt out, stale and
+                    // out of context, when the next reply arrives.
+                    queueRef.current = [];
                     stopCurrent();
                 } else if (cmd === 'skip') {
                     stopCurrent();
