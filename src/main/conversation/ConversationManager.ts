@@ -41,7 +41,6 @@ export class ConversationManager {
     createConversation(): Conversation | null {
         try {
             this.endCurrentConversation();
-            voiceManager.clearQueue(); // voice-mode fork: a new conversation drops stale audio
             this.currentConversation = new Conversation();
             this.setupConversationListeners();
             return this.currentConversation;
@@ -181,6 +180,8 @@ export class ConversationManager {
             console.log('Conversation ended');
         }
         this.currentConversation = null;
+        // voice-mode fork: ending a conversation (reset or new) drops queued audio
+        voiceManager.clearQueue();
     }
 
     /**

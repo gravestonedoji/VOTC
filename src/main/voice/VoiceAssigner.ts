@@ -9,6 +9,7 @@ import {
     VoiceCardLite,
     ageToBand,
     assignVoice,
+    fnv1a,
 } from './assignmentCore';
 import { DEFAULT_MAPPING } from './defaultMapping';
 
@@ -66,9 +67,11 @@ class VoiceAssigner {
         try {
             const parsed = JSON.parse(fs.readFileSync(this.mappingPath, 'utf-8')) as MappingFile;
             if (!Array.isArray(parsed.rules)) throw new Error('the file has no "rules" list');
+            const warnings = this.normalizeMapping(parsed);
             this.mapping = parsed;
-            this.mappingError = null;
-            console.log(`[voice] mapping loaded: ${parsed.rules.length} rule(s)`);
+            this.mappingError = warnings.length > 0 ? warnings.join(' ') : null;
+            console.log(`[voice] mapping loaded: ${parsed.rules.length} rule(s)` +
+                (warnings.length ? ` with warnings: ${warnings.join(' ')}` : ''));
             return { success: true, ruleCount: parsed.rules.length };
         } catch (err) {
             // Keep the previous (or default) mapping working; surface the error in the UI.
@@ -76,6 +79,38 @@ class VoiceAssigner {
             console.error('[voice]', this.mappingError);
             return { success: false, error: this.mappingError };
         }
+    }
+
+    /** Forgive common hand-edit mistakes ("has_trait_any": "brave" instead of ["brave"])
+     *  so a typo can never crash rule evaluation and silence all voices. */
+    private normalizeMapping(mapping: MappingFile): string[] {
+        const warnings: string[] = [];
+        const LIST_KEYS = ['has_trait_any', 'culture_contains_any', 'faith_contains_any', 'house_contains_any',
+            'title_contains_any', 'personality_contains_any'] as const;
+        const PICK_LIST_KEYS = ['personality_tags_any', 'accent_tag_any', 'mod_tags_any', 'voice_id_any'] as const;
+        mapping.rules.forEach((rule, i) => {
+            if (typeof rule.when !== 'object' || rule.when === null) rule.when = {};
+            if (typeof rule.pick_from !== 'object' || rule.pick_from === null) rule.pick_from = {};
+            const fix = (obj: Record<string, unknown>, key: string) => {
+                const v = obj[key];
+                if (v === undefined) return;
+                if (typeof v === 'string') obj[key] = [v];
+                else if (!Array.isArray(v)) {
+                    delete obj[key];
+                    warnings.push(`Rule ${i + 1}: "${key}" should be a list — ignored.`);
+                }
+            };
+            LIST_KEYS.forEach((k) => fix(rule.when as Record<string, unknown>, k));
+            PICK_LIST_KEYS.forEach((k) => fix(rule.pick_from as Record<string, unknown>, k));
+            for (const k of ['score_at_least', 'score_at_most'] as const) {
+                const v = rule.when[k];
+                if (v !== undefined && (typeof v !== 'object' || v === null || Array.isArray(v))) {
+                    delete rule.when[k];
+                    warnings.push(`Rule ${i + 1}: "${k}" should be an object like {"zeal": 70} — ignored.`);
+                }
+            }
+        });
+        return warnings;
     }
 
     private loadOverrides(): void {
@@ -140,7 +175,18 @@ class VoiceAssigner {
         }
 
         const facts = this.factsFrom(npc);
-        const result = assignVoice(facts, this.mapping, voices) as AssignmentResult;
+        let result: AssignmentResult;
+        try {
+            result = assignVoice(facts, this.mapping, voices) as AssignmentResult;
+        } catch (err) {
+            // Belt and braces: even if a rule still manages to throw, fall back
+            // to the catch-all pick rather than silencing this character.
+            this.mappingError = `A rule in voice-mapping.json failed (${(err as Error).message}) — using catch-all assignment.`;
+            console.error('[voice]', this.mappingError);
+            const sorted = [...voices].sort((a, b) => a.voice_id.localeCompare(b.voice_id));
+            const chosen = sorted[fnv1a(String(npc.id)) % sorted.length];
+            result = { voiceId: chosen.voice_id, ruleIndex: -1, ruleComment: 'error fallback', ladderStep: 'any', candidateCount: sorted.length };
+        }
         this.recordSpeaker(npc, result.voiceId, false);
         const ruleLabel = result.ruleIndex === -1 ? 'built-in catch-all' : `rule#${result.ruleIndex + 1} (${result.ruleComment || 'no comment'})`;
         this.logLine(

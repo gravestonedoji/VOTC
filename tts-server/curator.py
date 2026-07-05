@@ -83,11 +83,14 @@ class Curator:
 
     def _probe_duration(self, path: Path) -> float:
         ffprobe = find_ffmpeg("ffprobe")
-        result = subprocess.run(
-            [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries",
-             "format=duration", "-of", "json", str(path)],
-            capture_output=True, text=True, timeout=60,
-        )
+        try:
+            result = subprocess.run(
+                [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries",
+                 "format=duration", "-of", "json", str(path)],
+                capture_output=True, text=True, timeout=60,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise CuratorError("Reading this file took too long — it may be corrupt or huge.") from e
         if result.returncode != 0:
             raise CuratorError(
                 "This file could not be read as audio. It may be corrupt, "
@@ -95,7 +98,7 @@ class Curator:
             )
         try:
             return float(json.loads(result.stdout)["format"]["duration"])
-        except (KeyError, ValueError, json.JSONDecodeError) as e:
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as e:
             raise CuratorError("Could not determine the clip's duration — the file may be corrupt.") from e
 
     def analyze(self, source_path: str) -> dict:
@@ -118,12 +121,17 @@ class Curator:
         temp_wav = self.incoming_dir / f"{temp_id}.wav"
 
         ffmpeg = find_ffmpeg("ffmpeg")
-        result = subprocess.run(
-            [ffmpeg, "-y", "-i", str(src), "-vn", "-af", _FFMPEG_FILTERS,
-             "-ac", "1", "-ar", str(TARGET_SAMPLE_RATE), "-c:a", "pcm_s16le", str(temp_wav)],
-            capture_output=True, text=True, timeout=120,
-        )
+        try:
+            result = subprocess.run(
+                [ffmpeg, "-y", "-i", str(src), "-vn", "-af", _FFMPEG_FILTERS,
+                 "-ac", "1", "-ar", str(TARGET_SAMPLE_RATE), "-c:a", "pcm_s16le", str(temp_wav)],
+                capture_output=True, text=True, timeout=120,
+            )
+        except subprocess.TimeoutExpired as e:
+            temp_wav.unlink(missing_ok=True)
+            raise CuratorError("Audio conversion took too long — the file may be corrupt or huge.") from e
         if result.returncode != 0 or not temp_wav.is_file():
+            temp_wav.unlink(missing_ok=True)
             log.error("ffmpeg failed for %s: %s", src, result.stderr[-500:])
             raise CuratorError("Audio conversion failed — the file may be corrupt or in an unsupported format.")
 
@@ -294,6 +302,9 @@ class Curator:
     def audio_path(self, kind: str, ident: str) -> Path:
         if kind == "temp":
             p = self.incoming_dir / f"{ident}.wav"
+            # A crafted ident like "../x" must never escape the staging folder.
+            if p.resolve().parent != self.incoming_dir.resolve():
+                raise CuratorError("Audio not found.")
         else:
             entry = self.library.entries.get(ident)
             p = entry["wav_path"] if entry else None

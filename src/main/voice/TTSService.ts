@@ -27,6 +27,11 @@ export class TTSService extends EventEmitter {
     private child: ChildProcess | null = null;
     private status: TTSStatus = { state: 'stopped', port: null, voices: 0, device: null };
     private healthTimer: NodeJS.Timeout | null = null;
+    private restartTimer: NodeJS.Timeout | null = null;
+    // Poll generation: bumped whenever polling should cease, so an in-flight
+    // async poll iteration from a previous service instance can't re-arm
+    // itself or write status for a process that no longer exists.
+    private pollGen = 0;
     private stopping = false;
 
     getStatus(): TTSStatus {
@@ -65,7 +70,11 @@ export class TTSService extends EventEmitter {
             }
         }, STARTUP_TIMEOUT_MS);
 
+        // Every handler below ignores events from a replaced child: on Windows
+        // a killed python process can take seconds to actually exit, and its
+        // late events must not clobber the instance that replaced it.
         child.stdout?.on('data', (buf: Buffer) => {
+            if (this.child !== child) return;
             const text = buf.toString();
             for (const line of text.split(/\r?\n/)) {
                 if (!line.trim()) continue;
@@ -85,6 +94,7 @@ export class TTSService extends EventEmitter {
         });
 
         child.on('exit', (code) => {
+            if (this.child !== child) return;
             clearTimeout(startupDeadline);
             this.stopHealthPolling();
             this.child = null;
@@ -95,6 +105,7 @@ export class TTSService extends EventEmitter {
             }
         });
         child.on('error', (err) => {
+            if (this.child !== child) return;
             clearTimeout(startupDeadline);
             this.stopHealthPolling();
             this.child = null;
@@ -105,24 +116,38 @@ export class TTSService extends EventEmitter {
 
     stop(): void {
         this.stopping = true;
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer); // a pending restart must not resurrect the service
+            this.restartTimer = null;
+        }
         this.stopHealthPolling();
         if (this.child) {
-            this.child.kill();
-            this.child = null;
+            const child = this.child;
+            this.child = null; // detach first so the exit handler ignores the kill
+            child.kill();
         }
-        this.setStatus({ state: 'stopped', port: null, voices: 0, device: null });
+        this.setStatus({ state: 'stopped', port: null, voices: 0, device: null, detail: undefined });
     }
 
     restart(preferredPort: number): void {
         this.stop();
         // Give the old process a moment to release the port.
-        setTimeout(() => this.start(preferredPort), 1000);
+        this.restartTimer = setTimeout(() => {
+            this.restartTimer = null;
+            this.start(preferredPort);
+        }, 1000);
     }
 
     private beginHealthPolling(): void {
-        this.stopHealthPolling();
+        const gen = ++this.pollGen;
+        if (this.healthTimer) {
+            clearTimeout(this.healthTimer);
+            this.healthTimer = null;
+        }
         const poll = async () => {
-            const ok = await this.checkHealth();
+            if (gen !== this.pollGen) return;
+            const ok = await this.checkHealth(gen);
+            if (gen !== this.pollGen) return;
             // While starting, poll fast so the status light turns green promptly.
             const next = ok ? HEALTH_POLL_MS : (this.status.state === 'starting' ? 1500 : HEALTH_POLL_MS);
             this.healthTimer = setTimeout(poll, next);
@@ -131,23 +156,27 @@ export class TTSService extends EventEmitter {
     }
 
     private stopHealthPolling(): void {
+        this.pollGen++; // invalidates any in-flight poll iteration
         if (this.healthTimer) {
             clearTimeout(this.healthTimer);
             this.healthTimer = null;
         }
     }
 
-    private async checkHealth(): Promise<boolean> {
-        if (!this.status.port) return false;
+    private async checkHealth(gen: number): Promise<boolean> {
+        const port = this.status.port;
+        if (!port) return false;
         try {
-            const res = await fetch(`http://127.0.0.1:${this.status.port}/health`, {
+            const res = await fetch(`http://127.0.0.1:${port}/health`, {
                 signal: AbortSignal.timeout(3000),
             });
             if (!res.ok) throw new Error(`health returned ${res.status}`);
             const h = await res.json() as { voices: number; device: string };
+            if (gen !== this.pollGen) return false; // service was stopped/replaced mid-fetch
             this.setStatus({ state: 'running', voices: h.voices, device: h.device, detail: undefined });
             return true;
         } catch {
+            if (gen !== this.pollGen) return false;
             if (this.status.state === 'running') {
                 this.setStatus({ state: 'error', detail: 'service stopped responding' });
             }
@@ -164,7 +193,9 @@ export class TTSService extends EventEmitter {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, voice_id: voiceId }),
-            signal: AbortSignal.timeout(120_000),
+            // Generous: even very long replies finish in seconds on the GPU,
+            // but a CPU-fallback F5-TTS run must not silently drop them.
+            signal: AbortSignal.timeout(300_000),
         });
         if (res.status === 204) return null;
         if (!res.ok) throw new Error(`synthesize failed (${res.status}): ${await res.text()}`);
