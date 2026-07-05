@@ -30,12 +30,14 @@ not by Claude's own shell.
 
 ## How to start / stop everything
 
-- **TTS service alone:** double-click `tts-server/start-tts-server.bat`.
+- **Everything (normal use):** double-click `Start VOTC Voice.bat` in the repo root.
+  It refuses to launch while the installed VOTC app is running, then starts the app,
+  which spawns the TTS service itself. Closing the window stops everything.
+- **TTS service alone (diagnostics):** double-click `tts-server/start-tts-server.bat`.
   Wait for "model loaded" (~20 s). Close the window to stop it.
-- **Smoke test:** with the service running, double-click `tts-server/test-speak.bat` —
+- **Smoke test:** with a service running, double-click `tts-server/test-speak.bat` —
   it speaks a test line out loud. Also: `python tts-server/test_speak.py --text "..."`.
-- **App from source:** `npm run dev` in the repo root.
-- (Phase 5 will add a single `Start VOTC Voice.bat` that launches both.)
+  (In-app equivalent: Voice tab → "Speak a test line".)
 
 ## TTS service API (localhost only, default port 8765)
 
