@@ -23,6 +23,7 @@ const emptyCard = (): VoiceCard => ({
     personality_tags: [],
     accent_tag: 'neutral',
     mod_tags: [],
+    speed: 1.0,
     source_note: '',
 });
 
@@ -87,6 +88,20 @@ const CardForm: React.FC<{
                         </label>
                     ))}
                 </div>
+            </div>
+            <div className="form-group">
+                <label>
+                    Speaking speed: {(card.speed ?? 1).toFixed(2)}×
+                    {(card.speed ?? 1) === 1 ? ' (clip’s natural pace)' : (card.speed ?? 1) > 1 ? ' (faster)' : ' (slower)'}
+                </label>
+                <input
+                    type="range"
+                    min="0.7"
+                    max="1.5"
+                    step="0.05"
+                    value={card.speed ?? 1}
+                    onChange={(e) => set({ speed: parseFloat(e.target.value) })}
+                />
             </div>
             <div className="form-group" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 <label>

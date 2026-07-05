@@ -24,6 +24,7 @@ export interface VoiceCard {
   personality_tags: string[];
   accent_tag: string;
   mod_tags: string[];
+  speed?: number; // speaking pace multiplier; 1.0 = the clip's natural pace
   source_note: string;
   created?: string;
   transcript?: string;

@@ -174,6 +174,14 @@ class Engine:
 
     def synthesize(self, text: str, voice_id: str) -> bytes:
         ref_file, ref_text = self._reference_for(voice_id)
+        entry = self.library.entries.get(voice_id)
+        # Per-voice pacing from the catalog card: F5-TTS clones the reference
+        # clip's pace, so a languid clip yields languid speech everywhere
+        # unless corrected here.
+        try:
+            speed = max(0.5, min(2.0, float(entry["meta"].get("speed", 1.0)))) if entry else 1.0
+        except (TypeError, ValueError):
+            speed = 1.0
         t0 = time.perf_counter()
         # Call the inference step directly: F5TTS.infer() would re-run its
         # preprocessing on our padded reference and strip the padding again.
@@ -189,12 +197,13 @@ class Engine:
             self.f5.mel_spec_type,
             show_info=log.debug,
             progress=None,
+            speed=speed,
             device=self.f5.device,
         )
         elapsed = time.perf_counter() - t0
         duration = len(wav) / sr
-        log.info("synthesized %.1fs of audio in %.2fs (%.1fx realtime) voice=%s",
-                 duration, elapsed, duration / elapsed if elapsed > 0 else 0, voice_id)
+        log.info("synthesized %.1fs of audio in %.2fs (%.1fx realtime) voice=%s speed=%.2f",
+                 duration, elapsed, duration / elapsed if elapsed > 0 else 0, voice_id, speed)
         buf = io.BytesIO()
         sf.write(buf, wav, sr, format="WAV")
         return buf.getvalue()
@@ -221,6 +230,7 @@ class VoiceCard(BaseModel):
     personality_tags: list[str] = []
     accent_tag: str = "neutral"
     mod_tags: list[str] = []
+    speed: float = 1.0  # speaking pace multiplier; >1 faster, <1 slower
     source_note: str = ""
 
 

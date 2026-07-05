@@ -199,6 +199,13 @@ class Curator:
         os.replace(tmp, catalog_path)
 
     @staticmethod
+    def _clamp_speed(value) -> float:
+        try:
+            return max(0.5, min(2.0, float(value)))
+        except (TypeError, ValueError):
+            return 1.0
+
+    @staticmethod
     def _card_from(payload: dict, voice_id: str) -> dict:
         return {
             "voice_id": voice_id,
@@ -208,6 +215,7 @@ class Curator:
             "personality_tags": [str(t) for t in payload.get("personality_tags") or []],
             "accent_tag": str(payload.get("accent_tag") or "neutral"),
             "mod_tags": [str(t) for t in payload.get("mod_tags") or []],
+            "speed": Curator._clamp_speed(payload.get("speed")),
             "source_note": str(payload.get("source_note") or ""),
             "created": str(payload.get("created") or time.strftime("%Y-%m-%d")),
         }
