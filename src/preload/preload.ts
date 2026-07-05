@@ -188,7 +188,17 @@ contextBridge.exposeInMainWorld('voiceAPI', {
     ipcRenderer.invoke('voice:reloadLibrary'),
   openVoicesFolder: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('voice:openVoicesFolder'),
-  speakTestLine: (): Promise<void> => ipcRenderer.invoke('voice:speakTestLine'),
+  speakTestLine: (voiceId?: string): Promise<void> => ipcRenderer.invoke('voice:speakTestLine', voiceId),
+  // Library Curator
+  pickClips: (): Promise<string[]> => ipcRenderer.invoke('voice:pickClips'),
+  listVoices: (): Promise<any[]> => ipcRenderer.invoke('voice:listVoices'),
+  curatorAnalyze: (sourcePath: string): Promise<any> => ipcRenderer.invoke('voice:curatorAnalyze', sourcePath),
+  curatorSave: (payload: any): Promise<any> => ipcRenderer.invoke('voice:curatorSave', payload),
+  curatorUpdate: (payload: any): Promise<any> => ipcRenderer.invoke('voice:curatorUpdate', payload),
+  curatorRename: (oldId: string, newId: string): Promise<any> => ipcRenderer.invoke('voice:curatorRename', oldId, newId),
+  curatorDelete: (voiceId: string): Promise<any> => ipcRenderer.invoke('voice:curatorDelete', voiceId),
+  curatorRetranscribe: (voiceId: string): Promise<any> => ipcRenderer.invoke('voice:curatorRetranscribe', voiceId),
+  getAudio: (kind: 'voice' | 'temp', ident: string): Promise<any> => ipcRenderer.invoke('voice:getAudio', kind, ident),
   clearQueue: (): Promise<void> => ipcRenderer.invoke('voice:clearQueue'),
   playbackCommand: (cmd: 'stop' | 'skip'): Promise<void> => ipcRenderer.invoke('voice:playbackCommand', cmd),
   onStatus: (callback: (status: any) => void) => {

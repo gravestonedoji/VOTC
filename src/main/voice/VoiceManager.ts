@@ -49,9 +49,10 @@ class VoiceManager {
         }
     }
 
-    /** The permanent diagnostic: speak a fixed line through the whole pipeline. */
-    speakTestLine(): void {
-        this.enqueueSynthesis(TEST_LINE, 'Voice test');
+    /** The permanent diagnostic: speak a fixed line through the whole pipeline.
+     *  With a voiceId, tests that specific library voice. */
+    speakTestLine(voiceId?: string): void {
+        this.enqueueSynthesis(TEST_LINE, 'Voice test', voiceId);
     }
 
     /** New conversation, or user hit "clear queue": drop everything pending. */
@@ -65,16 +66,20 @@ class VoiceManager {
         this.send('voice:command', cmd);
     }
 
-    private enqueueSynthesis(text: string, speaker: string): void {
+    private enqueueSynthesis(text: string, speaker: string, requestedVoiceId?: string): void {
         const generationAtEnqueue = this.generation;
         // Serialize synthesis: the GPU handles one request at a time, and
         // FIFO order here guarantees utterances arrive in reply order.
         this.synthesisChain = this.synthesisChain.then(async () => {
             if (generationAtEnqueue !== this.generation) return; // queue was cleared meanwhile
             try {
-                const voices = await ttsService.listVoices();
-                if (voices.length === 0) return;
-                const voiceId = voices[0].voice_id;
+                let voiceId = requestedVoiceId;
+                if (!voiceId) {
+                    // Phase 2 placeholder assignment; Phase 4 brings the rules engine.
+                    const voices = await ttsService.listVoices();
+                    if (voices.length === 0) return;
+                    voiceId = voices[0].voice_id;
+                }
                 const wav = await ttsService.synthesize(text, voiceId);
                 if (!wav) return; // nothing speakable
                 if (generationAtEnqueue !== this.generation) return;

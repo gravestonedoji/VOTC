@@ -16,6 +16,29 @@ export interface VoiceUtterance {
   wavBase64: string;
 }
 
+export interface VoiceCard {
+  voice_id: string;
+  display_name: string;
+  gender: string;
+  age_band: string;
+  personality_tags: string[];
+  accent_tag: string;
+  mod_tags: string[];
+  source_note: string;
+  created?: string;
+  transcript?: string;
+}
+
+export interface AnalyzedClip {
+  temp_id: string;
+  source_name: string;
+  duration_s: number;
+  transcript: string;
+  warnings: string[];
+}
+
+export type CuratorResult<T> = { success: true; data: T } | { success: false; error: string };
+
 // Types for summaries manager
 export interface ConversationSummary {
   date: string;
@@ -44,7 +67,16 @@ declare global {
       restartService: () => Promise<void>;
       reloadLibrary: () => Promise<{ success: boolean; voices?: number; error?: string }>;
       openVoicesFolder: () => Promise<{ success: boolean; error?: string }>;
-      speakTestLine: () => Promise<void>;
+      speakTestLine: (voiceId?: string) => Promise<void>;
+      pickClips: () => Promise<string[]>;
+      listVoices: () => Promise<VoiceCard[]>;
+      curatorAnalyze: (sourcePath: string) => Promise<CuratorResult<AnalyzedClip>>;
+      curatorSave: (payload: VoiceCard & { temp_id: string; transcript: string }) => Promise<CuratorResult<VoiceCard>>;
+      curatorUpdate: (payload: VoiceCard & { transcript?: string }) => Promise<CuratorResult<VoiceCard>>;
+      curatorRename: (oldId: string, newId: string) => Promise<CuratorResult<VoiceCard>>;
+      curatorDelete: (voiceId: string) => Promise<CuratorResult<{ success: boolean }>>;
+      curatorRetranscribe: (voiceId: string) => Promise<CuratorResult<{ transcript: string }>>;
+      getAudio: (kind: 'voice' | 'temp', ident: string) => Promise<CuratorResult<string>>;
       clearQueue: () => Promise<void>;
       playbackCommand: (cmd: 'stop' | 'skip') => Promise<void>;
       onStatus: (callback: (status: VoiceServiceStatus) => void) => () => void;

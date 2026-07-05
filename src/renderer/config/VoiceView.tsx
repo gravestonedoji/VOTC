@@ -1,6 +1,7 @@
 import React, { ChangeEvent, useEffect, useState } from 'react';
 import type { VoiceSettings } from '../../main/llmProviders/types';
 import type { VoiceServiceStatus } from '../../preload/global';
+import VoiceCurator from './VoiceCurator';
 
 // voice-mode fork. Labels are hardcoded English: the voice feature is
 // English-only by design (see VOICE_README.md), so it stays out of the
@@ -141,10 +142,9 @@ const VoiceView: React.FC = () => {
                 <button type="button" onClick={() => window.voiceAPI.clearQueue()}>Clear queue</button>
             </div>
 
-            <small style={{ display: 'block', opacity: 0.7 }}>
-                Voices live in the library folder (votc_data\voices in the fork's data folder).
-                The Library Curator for importing and tagging your own clips arrives in Phase 3.
-            </small>
+            <hr />
+
+            <VoiceCurator serviceUp={serviceUp} voiceEnabled={settings.enabled} />
         </div>
     );
 };

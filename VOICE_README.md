@@ -42,10 +42,15 @@ not by Claude's own shell.
 ## TTS service API (localhost only, default port 8765)
 
 - `GET /health` — status, GPU device, library size
-- `GET /voices` — catalog entries the service can see
-- `POST /reload` — re-read the library folder (Curator calls this after imports)
+- `GET /voices` — catalog entries (incl. transcripts) the service can see
+- `POST /reload` — re-read the library folder
 - `POST /synthesize` `{"text": ..., "voice_id": ...}` — returns `audio/wav`;
   `204` if nothing speakable, `404` for unknown voice
+- Curator endpoints (used by the in-app Library Curator): `POST /curator/analyze`
+  (ffmpeg mono/24kHz/trim/normalize + local Whisper transcription into a staging
+  file under `voices/_incoming/`), `POST /curator/save|update|rename|delete|retranscribe`
+  (all catalog writes atomic, under a lock), `GET /curator/audio/{kind}/{id}` (previews).
+  ffmpeg is located via PATH or the winget links folder.
 
 If port 8765 is taken it walks upward (max +20) and prints `TTS_SERVICE_PORT=<port>`.
 
