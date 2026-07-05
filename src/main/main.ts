@@ -1,3 +1,4 @@
+import './voice/forkDataPath'; // voice-mode fork: MUST be first — redirects userData away from the installed app's folder
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, globalShortcut, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
