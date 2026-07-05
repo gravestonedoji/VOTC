@@ -39,6 +39,22 @@ export interface AnalyzedClip {
 
 export type CuratorResult<T> = { success: true; data: T } | { success: false; error: string };
 
+export interface RecentSpeaker {
+  id: number;
+  name: string;
+  lastVoiceId: string;
+  pinned: boolean;
+  lastSpokeAt: string;
+}
+
+export interface AssignmentInfo {
+  recent: RecentSpeaker[];
+  overrides: Record<string, string>;
+  mappingPath: string;
+  mappingError: string | null;
+  ruleCount: number;
+}
+
 // Types for summaries manager
 export interface ConversationSummary {
   date: string;
@@ -77,6 +93,10 @@ declare global {
       curatorDelete: (voiceId: string) => Promise<CuratorResult<{ success: boolean }>>;
       curatorRetranscribe: (voiceId: string) => Promise<CuratorResult<{ transcript: string }>>;
       getAudio: (kind: 'voice' | 'temp', ident: string) => Promise<CuratorResult<string>>;
+      getAssignmentInfo: () => Promise<AssignmentInfo>;
+      setOverride: (characterId: number, voiceId: string | null) => Promise<void>;
+      reloadMapping: () => Promise<{ success: boolean; error?: string; ruleCount?: number }>;
+      openMappingFile: () => Promise<{ success: boolean; error?: string }>;
       clearQueue: () => Promise<void>;
       playbackCommand: (cmd: 'stop' | 'skip') => Promise<void>;
       onStatus: (callback: (status: VoiceServiceStatus) => void) => () => void;

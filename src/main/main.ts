@@ -2,6 +2,7 @@ import './voice/forkDataPath'; // voice-mode fork: MUST be first — redirects u
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, globalShortcut, shell } from 'electron';
 import { ttsService } from './voice/TTSService';
 import { voiceManager } from './voice/VoiceManager';
+import { voiceAssigner } from './voice/VoiceAssigner';
 import { registerVoiceIpcHandlers } from './voice/ipc';
 import fs from 'fs';
 import path from 'path';
@@ -1114,6 +1115,7 @@ app.on('ready', () => {
   // voice-mode fork: wire the voice pipeline to the chat window and
   // auto-start the local TTS service if configured to
   voiceManager.init(() => chatWindow);
+  voiceAssigner.init();
   const voiceSettings = settingsRepository.getVoiceSettings();
   if (voiceSettings.autoStartService) {
     ttsService.start(voiceSettings.servicePort);
