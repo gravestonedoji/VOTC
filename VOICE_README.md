@@ -15,10 +15,18 @@ in Moe's Downloads).
 
 ## Fork data folder (important)
 
-The fork stores ALL its user data in `%APPDATA%\VOTC-Voice` — a one-time copy
-(taken 2026-07-05) of the installed app's `%APPDATA%\VOTC`. The two copies drift
-apart from that date. The installed app remains untouched as a fallback.
+The fork stores ALL its user data in `%APPDATA%\VOTC-Voice`, seeded from the
+installed app's `%APPDATA%\VOTC` by double-clicking `tts-server/fix-data-folder.bat`
+(safe to re-run any time; it only reads the installed app's data and never
+overwrites newer files in the fork's folder). The two copies drift apart after
+seeding. The installed app remains untouched as a fallback.
 Never point the fork back at `%APPDATA%\VOTC`.
+
+Note for Claude Code sessions: writes made by Claude's tools OUTSIDE the repo
+folder can land in a sandbox overlay invisible to normally-launched programs.
+Any file that must exist under `%APPDATA%` has to be created by a script the
+user runs (like fix-data-folder.bat) — and verified by a user-run program,
+not by Claude's own shell.
 
 ## How to start / stop everything
 
