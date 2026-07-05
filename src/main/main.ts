@@ -1,5 +1,8 @@
 import './voice/forkDataPath'; // voice-mode fork: MUST be first — redirects userData away from the installed app's folder
 import { app, BrowserWindow, screen, ipcMain, dialog, Tray, Menu, globalShortcut, shell } from 'electron';
+import { ttsService } from './voice/TTSService';
+import { voiceManager } from './voice/VoiceManager';
+import { registerVoiceIpcHandlers } from './voice/ipc';
 import fs from 'fs';
 import path from 'path';
 import { llmManager } from './LLMManager';
@@ -1105,7 +1108,16 @@ app.on('ready', () => {
   clearLog();
   promptConfigManager.seedDefaults();
   setupIpcHandlers(); // Setup handlers first
+  registerVoiceIpcHandlers(); // voice-mode fork
   chatWindow = createWindow(); // Create the main chat window and assign to global
+
+  // voice-mode fork: wire the voice pipeline to the chat window and
+  // auto-start the local TTS service if configured to
+  voiceManager.init(() => chatWindow);
+  const voiceSettings = settingsRepository.getVoiceSettings();
+  if (voiceSettings.autoStartService) {
+    ttsService.start(voiceSettings.servicePort);
+  }
   
   // Set up auto-updater
   appUpdater.setMainWindow(chatWindow);
@@ -1256,6 +1268,8 @@ app.on('before-quit', () => {
   letterManager.stopLogTailing();
   // Stop focus monitoring
   focusMonitor.stop();
+  // voice-mode fork: shut down the TTS service with the app
+  ttsService.stop();
 });
 
 app.on('activate', () => {

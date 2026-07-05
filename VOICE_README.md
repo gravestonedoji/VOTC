@@ -51,9 +51,23 @@ If port 8765 is taken it walks upward (max +20) and prints `TTS_SERVICE_PORT=<po
 
 | File | Why |
 |---|---|
-| `src/main/main.ts` | One added first-line import of `./voice/forkDataPath` (data-folder redirect). |
+| `src/main/main.ts` | First-line import of `./voice/forkDataPath` (data-folder redirect); voice imports; voice IPC registration + service auto-start in `app.on('ready')`; service shutdown in `before-quit`. |
+| `src/main/conversation/Conversation.ts` | Two one-line `voiceManager.onNpcReply(...)` calls at the streaming and non-streaming reply-completion points in `respondAs()`. |
+| `src/main/conversation/ConversationManager.ts` | One `voiceManager.clearQueue()` line in `createConversation()` (new conversation drops stale audio). |
+| `src/main/SettingsRepository.ts` | `voiceSettings` schema entry, getter/setter, inclusion in `getAppSettings()`. |
+| `src/main/llmProviders/types.ts` | `VoiceSettings` interface + defaults; `voiceSettings` field on `AppSettings`. |
+| `src/preload/preload.ts` | `voiceAPI` context-bridge block. |
+| `src/preload/global.d.ts` | Types for `window.voiceAPI` and voice events. |
+| `src/renderer/App.tsx` | One `useVoicePlayer()` call mounting the audio player. |
+| `src/renderer/config/ConfigPanel.tsx` | 'voice' tab: type union, header button, view conditional. |
+| `.gitignore` | Ignore `voice-clips/` (raw gathered clips staging folder). |
 
-Everything else so far is new files (`src/main/voice/`, `tts-server/`, this README).
+New files (never conflict on upstream merges): `src/main/voice/`, `src/renderer/voice/`,
+`src/renderer/config/VoiceView.tsx`, `tts-server/`, this README.
+
+Deviation note: the Voice tab label and VoiceView texts are hardcoded English rather
+than added to the 9 locale files — the voice feature is English-only by design and
+this keeps the upstream merge surface small.
 
 ## Pulling in a new upstream VOTC release
 

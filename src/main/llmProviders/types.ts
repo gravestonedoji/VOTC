@@ -267,8 +267,26 @@ export interface SummaryPromptSettings {
   letterSummaryPrompt: string; // Custom prompt for letter summaries
 }
 
+// voice-mode fork: preferences for the local TTS pipeline
+export interface VoiceSettings {
+  enabled: boolean;          // master toggle — OFF means zero TTS calls
+  volume: number;            // 0..1
+  stripEmotes: boolean;      // skip *asterisk-wrapped* roleplay actions when speaking
+  autoStartService: boolean; // spawn the local TTS service on app launch
+  servicePort: number;       // preferred port for the TTS service
+}
+
+export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  enabled: true,
+  volume: 0.8,
+  stripEmotes: true,
+  autoStartService: true,
+  servicePort: 8765,
+};
+
 export interface AppSettings {
   llmSettings: LLMSettings;
+  voiceSettings?: VoiceSettings; // voice-mode fork
   ck3UserFolderPath?: string | null;
   modLocationPath?: string | null;
   globalStreamEnabled?: boolean; // Global toggle for streaming

@@ -177,9 +177,43 @@ contextBridge.exposeInMainWorld('conversationAPI', {
     ipcRenderer.invoke('conversation:deleteCharacterSummaries', { playerId, characterId }),
  });
  
- // Actions API exposed to renderer
+ // voice-mode fork: TTS settings, service control, and playback events
+contextBridge.exposeInMainWorld('voiceAPI', {
+  getSettings: (): Promise<any> => ipcRenderer.invoke('voice:getSettings'),
+  saveSettings: (patch: any): Promise<any> => ipcRenderer.invoke('voice:saveSettings', patch),
+  getStatus: (): Promise<any> => ipcRenderer.invoke('voice:getStatus'),
+  startService: (): Promise<void> => ipcRenderer.invoke('voice:startService'),
+  restartService: (): Promise<void> => ipcRenderer.invoke('voice:restartService'),
+  reloadLibrary: (): Promise<{ success: boolean; voices?: number; error?: string }> =>
+    ipcRenderer.invoke('voice:reloadLibrary'),
+  speakTestLine: (): Promise<void> => ipcRenderer.invoke('voice:speakTestLine'),
+  clearQueue: (): Promise<void> => ipcRenderer.invoke('voice:clearQueue'),
+  playbackCommand: (cmd: 'stop' | 'skip'): Promise<void> => ipcRenderer.invoke('voice:playbackCommand', cmd),
+  onStatus: (callback: (status: any) => void) => {
+    const handler = (_event: any, status: any) => callback(status);
+    ipcRenderer.on('voice:status', handler);
+    return () => ipcRenderer.removeListener('voice:status', handler);
+  },
+  onEnqueue: (callback: (utterance: any) => void) => {
+    const handler = (_event: any, utterance: any) => callback(utterance);
+    ipcRenderer.on('voice:enqueue', handler);
+    return () => ipcRenderer.removeListener('voice:enqueue', handler);
+  },
+  onClear: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('voice:clear', handler);
+    return () => ipcRenderer.removeListener('voice:clear', handler);
+  },
+  onCommand: (callback: (cmd: 'stop' | 'skip') => void) => {
+    const handler = (_event: any, cmd: 'stop' | 'skip') => callback(cmd);
+    ipcRenderer.on('voice:command', handler);
+    return () => ipcRenderer.removeListener('voice:command', handler);
+  },
+});
+
+// Actions API exposed to renderer
  // Appends to existing preload bridges
- 
+
  contextBridge.exposeInMainWorld('actionsAPI', {
    reload: (): Promise<{ success: boolean; error?: string }> =>
      ipcRenderer.invoke('actions:reload'),

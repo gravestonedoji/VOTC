@@ -7,13 +7,14 @@ import SettingsView from './SettingsView';
 import ActionsView from './ActionsView';
 import PromptsView from './PromptsView';
 import SummariesView from './SummariesView';
+import VoiceView from './VoiceView'; // voice-mode fork
 import discordIcon from '../assets/discord-icon.svg';
 import tooltipIcon from '../assets/tooltip2.png';
 import logsIcon from '../assets/folder.svg';
 import { useDraggableResizable } from '../hooks/useDraggableResizable';
 import LanguageSelector from './components/LanguageSelector';
 
-type CurrentTab = 'connection' | 'settings' | 'actions' | 'prompts' | 'summaries';
+type CurrentTab = 'connection' | 'settings' | 'actions' | 'prompts' | 'summaries' | 'voice'; // voice-mode fork: + 'voice'
 
 interface ConfigPanelProps {
   onClose: () => void;
@@ -283,6 +284,14 @@ function ConfigPanel({ onClose }: ConfigPanelProps) {
         >
           {t('config.summaries')}
         </button>
+        {/* voice-mode fork: label hardcoded — feature is English-only, keeps locale files untouched */}
+        <button
+          onClick={() => setCurrentTab('voice')}
+          className={currentTab === 'voice' ? 'active' : ''}
+          style={{ zIndex: 12 }}
+        >
+          Voice
+        </button>
         <button className="config-close-button" onClick={onClose}>✕</button>
       </header>
       <main className="config-main-content">
@@ -291,6 +300,7 @@ function ConfigPanel({ onClose }: ConfigPanelProps) {
         {currentTab === 'actions' && <ActionsView />}
         {currentTab === 'prompts' && <PromptsView />}
         {currentTab === 'summaries' && <SummariesView />}
+        {currentTab === 'voice' && <VoiceView />} {/* voice-mode fork */}
       </main>
       
       <div className="app-version">

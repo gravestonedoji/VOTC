@@ -10,6 +10,7 @@ import { PromptBuilder } from "./PromptBuilder";
 import { ActionEngine } from "../actions/ActionEngine";
 import { EventEmitter } from "events";
 import { runFileManager } from "../actions/RunFileManager";
+import { voiceManager } from "../voice/VoiceManager"; // voice-mode fork
 import { shell } from "electron";
 import { TokenCounter } from "../utils/TokenCounter";
 import type { ActionInvocation } from "../actions/types";
@@ -311,9 +312,10 @@ export class Conversation {
                 }
                 
                 placeholder.isStreaming = false;
-                
+
                 // Only execute actions if stream completed successfully (not cancelled)
                 if (streamCompleted && !wasCancelled) {
+                    voiceManager.onNpcReply(placeholder.content, npc); // voice-mode fork: fire-and-forget, never blocks
                     const actionResults = await ActionEngine.evaluateForCharacter(this, npc, this.currentStreamController?.signal);
                     await this.handleActionResults(msgId, npc, actionResults);
                 }
@@ -323,7 +325,8 @@ export class Conversation {
                 this.emitUpdate();
                 placeholder.isStreaming = false;
                 streamCompleted = true;
-                
+                voiceManager.onNpcReply(placeholder.content, npc); // voice-mode fork: fire-and-forget, never blocks
+
                 // Execute actions and collect feedback
                 const actionResults = await ActionEngine.evaluateForCharacter(this, npc, this.currentStreamController?.signal);
                 await this.handleActionResults(msgId, npc, actionResults);
