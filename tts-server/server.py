@@ -30,8 +30,10 @@ from pathlib import Path
 import soundfile as sf
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+
+from curator import Curator, CuratorError
 
 DEFAULT_PORT = 8765
 MAX_PORT_ATTEMPTS = 20
@@ -171,9 +173,44 @@ class SynthesizeRequest(BaseModel):
     voice_id: str
 
 
+class AnalyzeRequest(BaseModel):
+    source_path: str
+
+
+class VoiceCard(BaseModel):
+    voice_id: str
+    display_name: str = ""
+    gender: str = "unknown"
+    age_band: str = "adult"
+    personality_tags: list[str] = []
+    accent_tag: str = "neutral"
+    mod_tags: list[str] = []
+    source_note: str = ""
+
+
+class SaveRequest(VoiceCard):
+    temp_id: str
+    transcript: str
+
+
+class UpdateRequest(VoiceCard):
+    transcript: str | None = None
+
+
+class RenameRequest(BaseModel):
+    old_id: str
+    new_id: str
+
+
+class VoiceIdRequest(BaseModel):
+    voice_id: str
+
+
 def build_app(library: VoiceLibrary, engine: Engine) -> FastAPI:
     app = FastAPI(title="VOTC voice-mode TTS service")
     started = time.time()
+    curator = Curator(library, engine)
+    curator.cleanup_stale_temps()
 
     @app.get("/health")
     def health():
@@ -189,7 +226,44 @@ def build_app(library: VoiceLibrary, engine: Engine) -> FastAPI:
 
     @app.get("/voices")
     def voices():
-        return {"voices": [e["meta"] for e in library.entries.values()]}
+        # The card plus the transcript, which the Curator UI edits.
+        return {"voices": [{**e["meta"], "transcript": e["ref_text"]} for e in library.entries.values()]}
+
+    # ---- Library Curator endpoints (used by the in-app Curator UI) ----
+
+    @app.post("/curator/analyze")
+    def curator_analyze(req: AnalyzeRequest):
+        return curator.analyze(req.source_path)
+
+    @app.post("/curator/save")
+    def curator_save(req: SaveRequest):
+        return curator.save_new(req.temp_id, req.transcript, req.model_dump())
+
+    @app.post("/curator/update")
+    def curator_update(req: UpdateRequest):
+        return curator.update(req.voice_id, req.transcript, req.model_dump())
+
+    @app.post("/curator/rename")
+    def curator_rename(req: RenameRequest):
+        return curator.rename(req.old_id, req.new_id)
+
+    @app.post("/curator/delete")
+    def curator_delete(req: VoiceIdRequest):
+        curator.delete(req.voice_id)
+        return {"success": True}
+
+    @app.post("/curator/retranscribe")
+    def curator_retranscribe(req: VoiceIdRequest):
+        return {"transcript": curator.retranscribe(req.voice_id)}
+
+    @app.get("/curator/audio/{kind}/{ident}")
+    def curator_audio(kind: str, ident: str):
+        return FileResponse(curator.audio_path(kind, ident), media_type="audio/wav")
+
+    @app.exception_handler(CuratorError)
+    def curator_error_handler(_, exc: CuratorError):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
 
     @app.post("/reload")
     def reload_library():

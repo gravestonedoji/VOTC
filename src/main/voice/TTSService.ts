@@ -182,6 +182,37 @@ export class TTSService extends EventEmitter {
         }
     }
 
+    /** Generic JSON POST to a curator endpoint. Throws with the service's plain-language message on 400. */
+    async curatorPost<T>(endpoint: string, body: unknown, timeoutMs = 180_000): Promise<T> {
+        if (this.status.state !== 'running' || !this.status.port) {
+            throw new Error('The TTS service is not running.');
+        }
+        const res = await fetch(`http://127.0.0.1:${this.status.port}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error((data as { detail?: string }).detail || `curator request failed (${res.status})`);
+        }
+        return data as T;
+    }
+
+    /** Fetch a library or pending-import clip as WAV bytes for preview playback. */
+    async fetchAudio(kind: 'voice' | 'temp', ident: string): Promise<Buffer> {
+        if (this.status.state !== 'running' || !this.status.port) {
+            throw new Error('The TTS service is not running.');
+        }
+        const res = await fetch(
+            `http://127.0.0.1:${this.status.port}/curator/audio/${kind}/${encodeURIComponent(ident)}`,
+            { signal: AbortSignal.timeout(15_000) },
+        );
+        if (!res.ok) throw new Error('Audio not found.');
+        return Buffer.from(await res.arrayBuffer());
+    }
+
     async reloadLibrary(): Promise<number> {
         if (this.status.state !== 'running' || !this.status.port) return 0;
         const res = await fetch(`http://127.0.0.1:${this.status.port}/reload`, {
