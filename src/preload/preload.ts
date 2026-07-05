@@ -186,6 +186,8 @@ contextBridge.exposeInMainWorld('voiceAPI', {
   restartService: (): Promise<void> => ipcRenderer.invoke('voice:restartService'),
   reloadLibrary: (): Promise<{ success: boolean; voices?: number; error?: string }> =>
     ipcRenderer.invoke('voice:reloadLibrary'),
+  openVoicesFolder: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('voice:openVoicesFolder'),
   speakTestLine: (): Promise<void> => ipcRenderer.invoke('voice:speakTestLine'),
   clearQueue: (): Promise<void> => ipcRenderer.invoke('voice:clearQueue'),
   playbackCommand: (cmd: 'stop' | 'skip'): Promise<void> => ipcRenderer.invoke('voice:playbackCommand', cmd),

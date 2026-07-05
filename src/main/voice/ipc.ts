@@ -1,6 +1,9 @@
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
+import fs from 'fs';
+import path from 'path';
 import { settingsRepository } from '../SettingsRepository';
 import { VoiceSettings } from '../llmProviders/types';
+import { VOTC_DATA_DIR } from '../utils/paths';
 import { ttsService } from './TTSService';
 import { voiceManager } from './VoiceManager';
 
@@ -32,6 +35,13 @@ export function registerVoiceIpcHandlers(): void {
         } catch (err) {
             return { success: false, error: String(err) };
         }
+    });
+
+    ipcMain.handle('voice:openVoicesFolder', async () => {
+        const voicesDir = path.join(VOTC_DATA_DIR, 'voices');
+        fs.mkdirSync(voicesDir, { recursive: true });
+        const error = await shell.openPath(voicesDir);
+        return { success: !error, error: error || undefined };
     });
 
     ipcMain.handle('voice:speakTestLine', () => voiceManager.speakTestLine());
