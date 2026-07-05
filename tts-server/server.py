@@ -182,6 +182,8 @@ def build_app(library: VoiceLibrary, engine: Engine) -> FastAPI:
             "device": engine.f5.device,
             "sample_rate": engine.f5.target_sample_rate,
             "voices": len(library.entries),
+            "voices_dir": str(library.voices_dir),
+            "user": os.environ.get("USERNAME", "?"),
             "uptime_s": round(time.time() - started, 1),
         }
 
@@ -234,6 +236,16 @@ def main() -> None:
 
     library = VoiceLibrary(args.voices_dir)
     library.reload()
+    if not library.entries:
+        # The classic cause: launched under a different Windows account (e.g.
+        # "Run as administrator"), whose %APPDATA% has no voice library.
+        log.warning("=" * 60)
+        log.warning("THE VOICE LIBRARY IS EMPTY. Looked in:")
+        log.warning("  %s", args.voices_dir)
+        log.warning("Running as Windows user '%s'. If that is not the account",
+                    os.environ.get("USERNAME", "?"))
+        log.warning("that owns the library, restart WITHOUT 'Run as administrator'.")
+        log.warning("=" * 60)
     engine = Engine(library)
     app = build_app(library, engine)
 
