@@ -102,3 +102,4 @@ voice-clips/
 
 # Claude Code session artifacts
 .claude/
+__pycache__/
