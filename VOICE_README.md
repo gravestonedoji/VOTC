@@ -30,9 +30,12 @@ not by Claude's own shell.
 
 ## How to start / stop everything
 
-- **Everything (normal use):** double-click `Start VOTC Voice.bat` in the repo root.
-  It refuses to launch while the installed VOTC app is running, then starts the app,
-  which spawns the TTS service itself. Closing the window stops everything.
+- **Everything (normal use):** double-click `Start VOTC Voice.bat` in the repo root —
+  or `VOTC Voice.exe`, a tiny stub that runs the same .bat and exists so it can be
+  pinned to the taskbar (right-click → Pin to taskbar). Rebuild the stub with
+  `launcher/build-launcher.bat` if it's ever changed. The launcher refuses to start
+  while the installed VOTC app is running, then starts the app, which spawns the
+  TTS service itself. Closing the console window stops everything.
 - **TTS service alone (diagnostics):** double-click `tts-server/start-tts-server.bat`.
   Wait for "model loaded" (~20 s). Close the window to stop it.
 - **Smoke test:** with a service running, double-click `tts-server/test-speak.bat` —
